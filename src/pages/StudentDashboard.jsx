@@ -15,6 +15,7 @@ const StudentDashboard = () => {
   const [timetable, setTimetable] = useState([]);
   const [activeLecture, setActiveLecture] = useState(null);
   const [confetti, setConfetti] = useState(false);
+  const [liveSessions, setLiveSessions] = useState([]);
 
   const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL;
 
@@ -27,16 +28,18 @@ const StudentDashboard = () => {
 
     const safeUser = {
       ...u,
-      branchCode: u.branchCode || u.extra_info?.branch || "",
-      sem: u.sem || u.extra_info?.sem || "",
-      id: u.id || u._id || u.extra_info?._id,
+      branchCode: u.branchCode || u.branch || u.extra_info?.branch || "",
+      sem: u.sem || u.semester || u.extra_info?.sem || "",
+      id: u.id || u._id || u.extra_info?._id || u.userId,
     };
     setUser(safeUser);
 
     if (safeUser.id) fetchAttendance(safeUser.id);
     fetchTimetable(safeUser.branchCode, safeUser.sem);
+    fetchLiveSessions(); // Fetch live sessions
   }, [navigate]);
 
+  // Fetch timetable based on branch and semester
   const fetchTimetable = async (branch, sem) => {
     try {
       const res = await axios.get(`${BACKEND_BASE}/api/timetables`);
@@ -45,10 +48,14 @@ const StudentDashboard = () => {
       const studentLectures = [];
 
       allTimetables.forEach((t) => {
-        if (
-          t.branchCode?.trim().toLowerCase() === branch?.trim().toLowerCase() &&
-          String(t.semester)?.trim() === String(sem)?.trim()
-        ) {
+        // More flexible matching for branch and semester
+        const branchMatch = t.branchCode && branch && 
+          t.branchCode.toString().trim().toLowerCase() === branch.toString().trim().toLowerCase();
+        
+        const semMatch = t.semester && sem && 
+          t.semester.toString().trim() === sem.toString().trim();
+
+        if (branchMatch && semMatch) {
           const { lectures } = t;
           if (lectures && typeof lectures === "object") {
             Object.entries(lectures).forEach(([day, slots]) => {
@@ -74,6 +81,16 @@ const StudentDashboard = () => {
     }
   };
 
+  // Fetch live sessions specifically
+  const fetchLiveSessions = async () => {
+    try {
+      const res = await axios.get(`${BACKEND_BASE}/api/sessions/live`);
+      setLiveSessions(res.data || []);
+    } catch (err) {
+      console.error("Error fetching live sessions:", err);
+    }
+  };
+
   const fetchAttendance = async (studentId) => {
     if (!studentId) return console.warn("Student ID missing, skipping attendance fetch.");
     try {
@@ -84,12 +101,32 @@ const StudentDashboard = () => {
     }
   };
 
-  const handleJoinSession = (lecture) => setActiveLecture(lecture);
+  const handleJoinSession = (lecture) => {
+    // Check if this lecture is currently live
+    const isCurrentlyLive = liveSessions.some(session => 
+      session.subject === lecture.subject && 
+      session.branchCode === lecture.branchCode
+    );
+    
+    if (isCurrentlyLive) {
+      setActiveLecture(lecture);
+    } else {
+      createNotification("This session is not currently active", "error");
+    }
+  };
 
   const handleScanSuccess = async (rawData) => {
     if (!user) return;
     try {
       const data = JSON.parse(rawData);
+      
+      // Verify the session is still valid
+      const sessionRes = await axios.get(`${BACKEND_BASE}/api/sessions/validate/${data.sessionId}`);
+      if (!sessionRes.data.valid) {
+        createNotification("This QR code has expired", "error");
+        return;
+      }
+      
       const record = {
         studentId: user.id,
         studentName: user.name,
@@ -153,7 +190,16 @@ const StudentDashboard = () => {
       <div className="flex justify-between items-center mb-8 p-4 bg-white rounded-2xl shadow-lg">
         <div>
           <h1 className="text-3xl font-bold text-gray-800">Student Dashboard</h1>
-          {user && <p className="text-gray-600 mt-1">Welcome back, {user.name}! 👋</p>}
+          {user && (
+            <p className="text-gray-600 mt-1">
+              Welcome back, {user.name}! 👋 
+              {user.branchCode && user.sem && (
+                <span className="ml-2 text-sm bg-indigo-100 text-indigo-800 px-2 py-1 rounded">
+                  {user.branchCode} - Sem {user.sem}
+                </span>
+              )}
+            </p>
+          )}
         </div>
         <button
           onClick={handleLogout}
@@ -165,33 +211,59 @@ const StudentDashboard = () => {
 
       {/* Live Sessions */}
       <section className="mb-10">
-        <h2 className="text-2xl font-semibold text-gray-8 00 mb-4">Today's Live Sessions</h2>
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {timetable.filter((lec) => lec.isLive).map((lecture) => (
-            <TimetableCard
-              key={lecture.id}
-              lecture={lecture}
-              onJoin={handleJoinSession}
-            />
-          ))}
-          {timetable.filter((lec) => lec.isLive).length === 0 && <p>No live lectures right now.</p>}
-        </div>
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Live Sessions</h2>
+        {liveSessions.length === 0 ? (
+          <p className="text-gray-500 italic">No live sessions at the moment</p>
+        ) : (
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+            {liveSessions.map((session) => (
+              <TimetableCard
+                key={session._id}
+                lecture={session}
+                onJoin={handleJoinSession}
+                isLive={true}
+              />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* Full Timetable Section */}
       <section className="mb-10">
         <h2 className="text-2xl font-semibold text-gray-800 mb-4">Your Timetable</h2>
         {timetable.length === 0 ? (
-          <p>No lectures available for your branch/semester.</p>
+          <div className="bg-white p-6 rounded-2xl shadow">
+            <p className="text-gray-500">
+              No timetable available for your branch/semester. 
+              Please contact administration if this is incorrect.
+            </p>
+            <p className="text-sm text-gray-400 mt-2">
+              Your details: Branch: {user?.branchCode || "Not set"}, Semester: {user?.sem || "Not set"}
+            </p>
+          </div>
         ) : (
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-            {timetable.map((lecture) => (
-              <TimetableCard
-                key={lecture.id}
-                lecture={lecture}
-                onJoin={handleJoinSession}
-              />
-            ))}
+          <div>
+            {/* Group by day */}
+            {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map(day => {
+              const dayLectures = timetable.filter(lecture => lecture.day === day);
+              if (dayLectures.length === 0) return null;
+              
+              return (
+                <div key={day} className="mb-6">
+                  <h3 className="text-xl font-medium text-gray-700 mb-3">{day}</h3>
+                  <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                    {dayLectures.map((lecture) => (
+                      <TimetableCard
+                        key={lecture.id}
+                        lecture={lecture}
+                        onJoin={handleJoinSession}
+                        isLive={liveSessions.some(s => s.subject === lecture.subject)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
       </section>
@@ -207,7 +279,15 @@ const StudentDashboard = () => {
               className="bg-white rounded-2xl p-6 max-w-md w-full"
               onClick={(e) => e.stopPropagation()}
             >
-              <h2 className="text-xl font-bold mb-4">Scan QR for {activeLecture.subject}</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-xl font-bold">Scan QR for {activeLecture.subject}</h2>
+                <button 
+                  onClick={() => setActiveLecture(null)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </button>
+              </div>
               <div className="border-4 border-dashed border-purple-200 rounded-xl p-2">
                 <QRScanner onScanSuccess={handleScanSuccess} />
               </div>
@@ -223,26 +303,30 @@ const StudentDashboard = () => {
       <section className="mt-12">
         <h2 className="text-2xl font-semibold text-gray-800 mb-6">Your Attendance</h2>
         {attendance.length === 0 ? (
-          <p>No attendance marked yet.</p>
+          <p className="text-gray-500">No attendance records yet.</p>
         ) : (
-          <table className="w-full bg-white rounded-2xl shadow-lg overflow-hidden">
-            <thead>
-              <tr>
-                <th>Subject</th>
-                <th>Session ID</th>
-                <th>Time</th>
-              </tr>
-            </thead>
-            <tbody>
-              {attendance.map((att, idx) => (
-                <tr key={idx}>
-                  <td>{att.subject}</td>
-                  <td>{att.sessionId}</td>
-                  <td>{new Date(att.time).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Subject</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Session ID</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {attendance.map((att, idx) => (
+                    <tr key={idx}>
+                      <td className="px-6 py-4 whitespace-nowrap">{att.subject}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">{att.sessionId}</td>
+                      <td className="px-6 py-4 whitespace-nowrap">{new Date(att.time).toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         )}
       </section>
 
