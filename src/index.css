@@ -1,0 +1,67 @@
+/* Reset default Vite styles without affecting future CSS */
+:root {
+  font-family: inherit;
+  line-height: inherit;
+  font-weight: inherit;
+  color-scheme: initial;
+  color: inherit;
+  background-color: transparent;
+  font-synthesis: inherit;
+  text-rendering: inherit;
+  -webkit-font-smoothing: inherit;
+  -moz-osx-font-smoothing: inherit;
+}
+
+body {
+  margin: initial;
+  display: initial;
+  place-items: initial;
+  min-width: initial;
+  min-height: initial;
+}
+
+a {
+  font-weight: inherit;
+  color: inherit;
+  text-decoration: inherit;
+}
+a:hover {
+  color: inherit;
+}
+
+h1 {
+  font-size: inherit;
+  line-height: inherit;
+}
+
+button {
+  border-radius: initial;
+  border: initial;
+  padding: initial;
+  font-size: inherit;
+  font-weight: inherit;
+  font-family: inherit;
+  background-color: initial;
+  cursor: initial;
+  transition: initial;
+}
+button:hover {
+  border-color: initial;
+}
+button:focus,
+button:focus-visible {
+  outline: initial;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: inherit;
+    background-color: transparent;
+  }
+  a:hover {
+    color: inherit;
+  }
+  button {
+    background-color: initial;
+  }
+}

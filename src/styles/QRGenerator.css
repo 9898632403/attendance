@@ -1,0 +1,96 @@
+/* src/components/QRGenerator.css */
+.qr-generator-container {
+  text-align: center;
+  padding: 20px;
+  max-width: 300px;
+  margin: 0 auto;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+}
+
+.qr-title {
+  color: #2d3748;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 1.5rem;
+}
+
+.qr-subtitle {
+  color: #718096;
+  margin-bottom: 20px;
+  font-size: 0.875rem;
+}
+
+.qr-code-wrapper {
+  position: relative;
+  background: white;
+  padding: 16px;
+  display: inline-block;
+  border-radius: 12px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+  transition: all 0.3s ease;
+}
+
+.qr-code-wrapper:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+}
+
+.qr-code-inner {
+  position: relative;
+}
+
+.refreshing .qr-code-element {
+  opacity: 0.7;
+  filter: blur(2px);
+  transition: opacity 0.3s ease, filter 0.3s ease;
+}
+
+.refresh-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 8px;
+  color: #4a5568;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #e2e8f0;
+  border-radius: 50%;
+  border-top-color: #4299e1;
+  animation: spin 1s linear infinite;
+  margin-bottom: 8px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.security-note {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 16px;
+  padding: 12px;
+  background-color: #ebf8ff;
+  border-radius: 8px;
+  color: #2b6cb0;
+  font-size: 0.75rem;
+  gap: 8px;
+}
+
+.security-note svg {
+  flex-shrink: 0;
+}
