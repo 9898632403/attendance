@@ -5,7 +5,7 @@ import QRGenerator from "../components/QRGenerator";
 import TimetableCard from "../components/TimetableCard";
 import axios from "axios";
 
-const BACKEND_BASE = import.meta.env.VITE_BACKEND || "http://localhost:5000";
+const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL;
 
 const FacultyDashboard = () => {
   const navigate = useNavigate();

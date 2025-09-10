@@ -3,7 +3,7 @@ import { useState, useRef } from "react";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import "../styles/QRScanner.css";
 
-const BACKEND_BASE = import.meta.env.VITE_BACKEND || "http://localhost:5000";
+const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL;
 
 const QRScanner = () => {
   const [scanResult, setScanResult] = useState("");
@@ -130,6 +130,7 @@ const QRScanner = () => {
       )}
 
       {scanResult && (
+        
         <div>
           <p>Scanned QR value:</p>
           <strong>{scanResult}</strong>

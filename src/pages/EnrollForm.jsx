@@ -41,7 +41,7 @@ const EnrollForm = ({ adminEmail, user, token }) => {
           : { subjects };
 
       const res = await axios.post(
-        "http://localhost:5000/api/enroll",
+        `${import.meta.env.VITE_BACKEND_URL}/api/enroll`,
         {
           admin_email: adminEmail,
           name,

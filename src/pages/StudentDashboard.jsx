@@ -16,7 +16,7 @@ const StudentDashboard = () => {
   const [activeLecture, setActiveLecture] = useState(null);
   const [confetti, setConfetti] = useState(false);
 
-  const BACKEND_BASE = "http://localhost:5000";
+  const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL;
 
   useEffect(() => {
     const u = JSON.parse(localStorage.getItem("user"));
@@ -165,7 +165,7 @@ const StudentDashboard = () => {
 
       {/* Live Sessions */}
       <section className="mb-10">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Today's Live Sessions</h2>
+        <h2 className="text-2xl font-semibold text-gray-8 00 mb-4">Today's Live Sessions</h2>
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {timetable.filter((lec) => lec.isLive).map((lecture) => (
             <TimetableCard

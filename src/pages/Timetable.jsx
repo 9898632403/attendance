@@ -20,7 +20,7 @@ const Timetable = ({ adminView = false, user, token }) => {
 
   const fetchBranches = async () => {
     try {
-      const res = await axios.get("http://localhost:5000/api/timetables", {
+      const res = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/timetables`, {
         headers: {
           "X-User-Email": user?.email,
           role: user?.role,
@@ -42,7 +42,7 @@ const Timetable = ({ adminView = false, user, token }) => {
 
     try {
       const res = await axios.get(
-        `http://localhost:5000/api/timetable/${encodeURIComponent(
+        `${import.meta.env.VITE_BACKEND_URL}/api/timetable/${encodeURIComponent(
           branch
         )}/${encodeURIComponent(semester)}`,
         {
@@ -92,7 +92,7 @@ const Timetable = ({ adminView = false, user, token }) => {
     setError("");
     setSuccess("");
     try {
-      await axios.post("http://localhost:5000/api/timetable", formData, {
+      await axios.post(`${import.meta.env.VITE_BACKEND_URL}/api/timetable`, formData, {
         headers: {
           "X-User-Email": user?.email,
           role: user?.role,

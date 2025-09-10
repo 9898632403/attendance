@@ -19,7 +19,7 @@ const Login = () => {
 
     try {
       const loginRes = await axios.post(
-        "http://localhost:5000/api/login",
+        `${import.meta.env.VITE_BACKEND_URL}/api/login`,
         { email, password },
         { headers: { "Content-Type": "application/json" } }
       );

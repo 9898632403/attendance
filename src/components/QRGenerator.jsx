@@ -2,7 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import QRCode from "react-qr-code";
 import "../styles/QRGenerator.css";
 
-const BACKEND_BASE = import.meta.env.VITE_BACKEND || "http://localhost:5000";
+const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL;
 
 const QRGenerator = ({ facultyEmail }) => {
   const [qrValue, setQrValue] = useState("");
