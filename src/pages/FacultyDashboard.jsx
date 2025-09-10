@@ -12,6 +12,7 @@ const FacultyDashboard = () => {
   const [user, setUser] = useState(null);
   const [timetable, setTimetable] = useState([]);
   const [selectedLecture, setSelectedLecture] = useState(null);
+  const [attendanceForSession, setAttendanceForSession] = useState([]);
 
   // Load user from localStorage
   useEffect(() => {
@@ -97,12 +98,29 @@ const FacultyDashboard = () => {
         setTimetable(updatedTimetable);
         setSelectedLecture(sessionLecture);
         localStorage.setItem("timetable", JSON.stringify(updatedTimetable));
+
+        // Start fetching attendance automatically every 5 seconds
+        fetchAttendanceLoop(sessionLecture.sessionId);
       } else {
         console.error("❌ Session creation failed:", res.data);
       }
     } catch (err) {
       console.error("❌ Error creating session:", err);
     }
+  };
+
+  const fetchAttendanceLoop = (sessionId) => {
+    const fetchAttendance = async () => {
+      try {
+        const res = await axios.get(`${BACKEND_BASE}/api/attendance/session/${sessionId}`);
+        setAttendanceForSession(res.data || []);
+      } catch (err) {
+        console.error("Error fetching attendance for session:", err);
+      }
+    };
+    fetchAttendance(); // initial fetch
+    const interval = setInterval(fetchAttendance, 5000); // fetch every 5s
+    return () => clearInterval(interval);
   };
 
   const handleLogout = () => {
@@ -146,9 +164,22 @@ const FacultyDashboard = () => {
             Attendance QR for {selectedLecture.subject}
           </h2>
           <QRGenerator
-            sessionId={selectedLecture.sessionId} // ✅ backend sessionId
+            sessionId={selectedLecture.sessionId}
             facultyEmail={user.email}
           />
+
+          <h3 className="mt-6 text-lg font-medium">Students Present</h3>
+          {attendanceForSession.length === 0 ? (
+            <p className="text-gray-500 italic">No students have scanned the QR yet.</p>
+          ) : (
+            <ul className="list-disc ml-6 mt-2">
+              {attendanceForSession.map((att) => (
+                <li key={att.studentId}>
+                  {att.studentName} - {new Date(att.time).toLocaleTimeString()}
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       )}
     </div>
