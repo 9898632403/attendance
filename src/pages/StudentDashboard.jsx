@@ -1,229 +1,132 @@
-// src/pages/StudentDashboard.jsx
-import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import QRScanner from "../components/QRScanner";
-import TimetableCard from "../components/TimetableCard";
-import { AnimatePresence } from "framer-motion";
-import Confetti from "react-dom-confetti";
+// src/pages/FacultyDashboard.jsx
+import { useState, useEffect } from "react";
 import axios from "axios";
-import "../styles/stud.css";
+import QRCode from "react-qr-code";
+import "../styles/faculty.css";
 
-const StudentDashboard = () => {
-  const navigate = useNavigate();
+const FacultyDashboard = () => {
   const [user, setUser] = useState(null);
-  const [attendance, setAttendance] = useState([]);
-  const [timetable, setTimetable] = useState([]);
-  const [activeLecture, setActiveLecture] = useState(null);
-  const [confetti, setConfetti] = useState(false);
-  const [liveLecture, setLiveLecture] = useState(null);
+  const [timetables, setTimetables] = useState([]);
+  const [selected, setSelected] = useState({ branch: "", semester: "" });
+  const [liveSession, setLiveSession] = useState(null);
+  const [qrValue, setQrValue] = useState("");
 
   const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL;
-  const normalize = (str) => (str || "").toString().trim().toLowerCase();
 
   useEffect(() => {
     const u = JSON.parse(localStorage.getItem("user"));
-    if (!u || u.role !== "student") {
-      navigate("/login");
+    if (!u || !["faculty", "admin"].includes(u.role)) {
+      window.location.href = "/login";
       return;
     }
+    setUser(u);
+    fetchBranches();
+  }, []);
 
-    const safeUser = {
-      ...u,
-      branchCode: u.branchCode || u.extra_info?.branch || "",
-      sem: u.sem || u.extra_info?.sem || "",
-      email: u.email,
-      name: u.name,
-    };
-
-    setUser(safeUser);
-
-    if (safeUser.email) fetchAttendance(safeUser.email);
-    if (safeUser.branchCode && safeUser.sem) {
-      fetchTimetable(safeUser.branchCode, safeUser.sem);
-      fetchLiveLecture(safeUser.branchCode, safeUser.sem);
-    }
-  }, [navigate]);
-
-  // fetch all timetable (admin uploaded)
-  const fetchTimetable = async (branch, sem) => {
+  const fetchBranches = async () => {
     try {
-      const res = await axios.get(`${BACKEND_BASE}/api/timetables`);
-      const allTimetables = res.data || [];
-
-      const studentLectures = [];
-      allTimetables.forEach((t) => {
-        if (
-          normalize(t.branchCode) === normalize(branch) &&
-          normalize(t.semester) === normalize(sem)
-        ) {
-          Object.entries(t.lectures || {}).forEach(([day, slots]) => {
-            Object.entries(slots).forEach(([slot, lecture]) => {
-              if (!lecture) return;
-              studentLectures.push({
-                id: `${branch}-${sem}-${day}-${slot}`,
-                branchCode: t.branchCode,
-                semester: t.semester,
-                day,
-                slot,
-                ...lecture,
-                isLive: lecture.isLive || false,
-              });
-            });
-          });
-        }
+      const res = await axios.get(`${BACKEND_BASE}/api/timetables`, {
+        headers: {
+          "X-User-Email": user?.email,
+          role: user?.role,
+        },
       });
-      setTimetable(studentLectures);
+      setTimetables(res.data || []);
     } catch (err) {
-      console.error("❌ Error fetching timetable:", err);
+      console.error("❌ Error fetching timetables:", err);
     }
   };
 
-  // fetch live lecture (specific branch+sem)
-  const fetchLiveLecture = async (branch, sem) => {
+  const handleSelectChange = (e) => {
+    const [branch, semester] = e.target.value.split("|");
+    setSelected({ branch, semester });
+  };
+
+  const startLiveSession = async () => {
+    if (!selected.branch || !selected.semester) return alert("Select branch & semester");
+
     try {
-      const res = await axios.get(
-        `${BACKEND_BASE}/api/timetable/${branch}/${sem}/live`
+      const res = await axios.post(
+        `${BACKEND_BASE}/api/session/create`,
+        { faculty_email: user.email, meta: { branch: selected.branch, semester: selected.semester } },
+        { headers: { "X-User-Email": user.email } }
       );
-      if (res.data && Object.keys(res.data).length > 0) {
-        setLiveLecture(res.data);
-      } else {
-        setLiveLecture(null);
-      }
+      setLiveSession({
+        sessionId: res.data.sessionId,
+        token: res.data.token,
+        token_expiry: res.data.token_expiry,
+      });
+      setQrValue(`${res.data.sessionId}::${res.data.token}`);
+      alert("Live session started!");
     } catch (err) {
-      console.error("❌ Error fetching live lecture:", err);
+      console.error("❌ Start session error:", err);
+      alert("Failed to start live session");
     }
   };
 
-  // fetch attendance for logged student
-  const fetchAttendance = async (studentEmail) => {
+  const stopLiveSession = async () => {
+    if (!liveSession) return;
     try {
-      const res = await axios.get(`${BACKEND_BASE}/api/attendance/${studentEmail}`);
-      setAttendance(res.data || []);
-    } catch (err) {
-      console.error("❌ Error fetching attendance:", err);
-    }
-  };
-
-  // when student joins lecture
-  const handleJoinSession = (lecture) => {
-    if (
-      liveLecture &&
-      normalize(liveLecture.subject) === normalize(lecture.subject)
-    ) {
-      setActiveLecture(lecture);
-    } else {
-      createNotification("This session is not live right now", "error");
-    }
-  };
-
-  // on QR scan success
-  const handleScanSuccess = async (rawData) => {
-    if (!user) return;
-    try {
-      const record = await axios.post(
-        `${BACKEND_BASE}/api/attendance/scan`,
-        { qrValue: rawData },
-        {
-          headers: {
-            "X-User-Email": user.email,
-          },
-        }
+      await axios.patch(
+        `${BACKEND_BASE}/api/timetable/${selected.branch}/${selected.semester}/reset-live`,
+        {},
+        { headers: { "X-User-Email": user.email, role: user.role } }
       );
-
-      if (record.data.message?.includes("marked")) {
-        setConfetti(true);
-        setTimeout(() => setConfetti(false), 3000);
-        fetchAttendance(user.email);
-        createNotification("Attendance marked successfully ✅", "success");
-        setActiveLecture(null);
-      } else {
-        createNotification(record.data.message || "Scan failed", "error");
-      }
-    } catch (error) {
-      console.error("❌ QR Scan error:", error);
-      createNotification("Invalid QR or expired session", "error");
+      setLiveSession(null);
+      setQrValue("");
+      alert("Live session stopped");
+    } catch (err) {
+      console.error("❌ Stop session error:", err);
+      alert("Failed to stop session");
     }
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem("user");
-    navigate("/login");
-  };
-
-  const createNotification = (message, type) => {
-    const notification = document.createElement("div");
-    notification.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg font-medium text-white ${
-      type === "success" ? "bg-green-500" : "bg-red-500"
-    } animate-fade-in`;
-    notification.textContent = message;
-    document.body.appendChild(notification);
-    setTimeout(() => {
-      notification.classList.remove("animate-fade-in");
-      notification.classList.add("animate-fade-out");
-      setTimeout(() => {
-        if (document.body.contains(notification))
-          document.body.removeChild(notification);
-      }, 500);
-    }, 3000);
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-6">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-indigo-800">
-          Welcome, {user?.name}
-        </h1>
+    <div className="min-h-screen p-6 bg-gradient-to-br from-green-50 to-teal-50">
+      <h1 className="text-2xl font-bold mb-4">Welcome, {user?.name}</h1>
+
+      <div className="mb-6">
+        <label className="font-semibold mr-2">Select Branch & Semester:</label>
+        <select onChange={handleSelectChange} value={`${selected.branch}|${selected.semester}`}>
+          <option value="">-- Select --</option>
+          {timetables.map((t, idx) => (
+            <option key={idx} value={`${t.branchCode}|${t.semester}`}>
+              {t.branchCode} - Semester {t.semester}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex gap-4 mb-6">
         <button
-          onClick={handleLogout}
-          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+          onClick={startLiveSession}
         >
-          Logout
+          Start Live Session
+        </button>
+        <button
+          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+          onClick={stopLiveSession}
+          disabled={!liveSession}
+        >
+          Stop Live Session
         </button>
       </div>
 
-      <h2 className="text-xl font-semibold mb-4">Your Timetable</h2>
-      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {timetable.map((lecture) => (
-          <TimetableCard
-            key={lecture.id}
-            lecture={lecture}
-            onJoin={handleJoinSession}
-          />
-        ))}
-      </div>
-
-      {activeLecture && (
-        <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
-            <h3 className="text-lg font-bold mb-4">
-              Join Session: {activeLecture.subject}
-            </h3>
-            <QRScanner onScanSuccess={handleScanSuccess} />
-            <button
-              onClick={() => setActiveLecture(null)}
-              className="mt-4 bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-          </div>
+      {liveSession && (
+        <div className="bg-white p-4 rounded shadow w-full max-w-sm">
+          <h2 className="font-semibold mb-2">Live Session QR</h2>
+          <QRCode value={qrValue} size={180} />
+          <p className="mt-2 text-sm">
+            Session ID: <strong>{liveSession.sessionId}</strong>
+          </p>
+          <p className="text-sm">
+            Token expires: {new Date(liveSession.token_expiry).toLocaleTimeString()}
+          </p>
         </div>
       )}
-
-      <h2 className="text-xl font-semibold mt-8 mb-4">Your Attendance</h2>
-      <ul className="bg-white shadow rounded p-4 space-y-2">
-        {attendance.map((a, idx) => (
-          <li key={idx} className="border-b pb-2">
-            <strong>{a.sessionId}</strong> —{" "}
-            {new Date(a.timestamp).toLocaleString()}
-          </li>
-        ))}
-      </ul>
-
-      <AnimatePresence>
-        <Confetti active={confetti} />
-      </AnimatePresence>
     </div>
   );
 };
 
-export default StudentDashboard;
+export default FacultyDashboard;
