@@ -14,7 +14,6 @@ const EnrollForm = ({ adminEmail, user, token }) => {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
-  // ✅ Predefined lists (use same for backend consistency)
   const branches = ["BBA", "BCA", "MBA", "B.Tech CE", "B.Tech IT"];
   const semesters = Array.from({ length: 8 }, (_, i) => i + 1);
   const subjectOptions = [
@@ -48,9 +47,9 @@ const EnrollForm = ({ adminEmail, user, token }) => {
 
       if (role === "student") {
         extraInfo = {
-          branchCode: branch,
-          semester: sem,
-          mobile,
+          branch: branch, // must match backend
+          sem: sem,       // must match backend
+          mobile: mobile, // must match backend
         };
       } else if (role === "faculty") {
         extraInfo = {
@@ -79,11 +78,10 @@ const EnrollForm = ({ adminEmail, user, token }) => {
 
       setSuccess(res.data.message || "User enrolled successfully");
 
-      // ✅ Store student info locally (for StudentDashboard use)
       if (role === "student" && res.data.user?._id) {
         const storedUser = {
           ...res.data.user,
-          branchCode: branch,
+          branchCode: `${branch}-${sem}`, // store branchCode locally if needed
           sem,
           id: res.data.user._id,
         };
