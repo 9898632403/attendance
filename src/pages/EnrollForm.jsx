@@ -14,9 +14,18 @@ const EnrollForm = ({ adminEmail, user, token }) => {
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
 
-  const branches = ["BBA", "B.Tech CE", "MBA"];
+  // ✅ Predefined lists (use same for backend consistency)
+  const branches = ["BBA", "BCA", "MBA", "B.Tech CE", "B.Tech IT"];
   const semesters = Array.from({ length: 8 }, (_, i) => i + 1);
-  const subjectOptions = ["Math", "Physics", "Accounting", "AI", "ML"];
+  const subjectOptions = [
+    "Math",
+    "Physics",
+    "Accounting",
+    "AI",
+    "ML",
+    "Marketing",
+    "Economics",
+  ];
 
   const resetForm = () => {
     setName("");
@@ -35,10 +44,19 @@ const EnrollForm = ({ adminEmail, user, token }) => {
     setSuccess("");
 
     try {
-      const extraInfo =
-        role === "student"
-          ? { branch, sem, mobile }
-          : { subjects };
+      let extraInfo = {};
+
+      if (role === "student") {
+        extraInfo = {
+          branchCode: branch,
+          semester: sem,
+          mobile,
+        };
+      } else if (role === "faculty") {
+        extraInfo = {
+          subjects,
+        };
+      }
 
       const res = await axios.post(
         `${import.meta.env.VITE_BACKEND_URL}/api/enroll`,
@@ -61,7 +79,7 @@ const EnrollForm = ({ adminEmail, user, token }) => {
 
       setSuccess(res.data.message || "User enrolled successfully");
 
-      // ✅ Store student info locally for StudentDashboard
+      // ✅ Store student info locally (for StudentDashboard use)
       if (role === "student" && res.data.user?._id) {
         const storedUser = {
           ...res.data.user,
@@ -97,32 +115,44 @@ const EnrollForm = ({ adminEmail, user, token }) => {
           onChange={(e) => setName(e.target.value)}
           placeholder="Name"
           required
+          className="w-full border rounded p-2"
         />
+
         <input
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           placeholder="Email"
           type="email"
           required
+          className="w-full border rounded p-2"
         />
+
         <input
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder="Password"
           required
+          className="w-full border rounded p-2"
         />
-        <select value={role} onChange={(e) => setRole(e.target.value)}>
+
+        <select
+          value={role}
+          onChange={(e) => setRole(e.target.value)}
+          className="w-full border rounded p-2"
+        >
           <option value="student">Student</option>
           <option value="faculty">Faculty</option>
         </select>
 
+        {/* Student-specific fields */}
         {role === "student" && (
           <>
             <select
               value={branch}
               onChange={(e) => setBranch(e.target.value)}
               required
+              className="w-full border rounded p-2"
             >
               <option value="">Select Branch</option>
               {branches.map((b) => (
@@ -136,6 +166,7 @@ const EnrollForm = ({ adminEmail, user, token }) => {
               value={sem}
               onChange={(e) => setSem(e.target.value)}
               required
+              className="w-full border rounded p-2"
             >
               <option value="">Select Semester</option>
               {semesters.map((s) => (
@@ -150,10 +181,12 @@ const EnrollForm = ({ adminEmail, user, token }) => {
               onChange={(e) => setMobile(e.target.value)}
               placeholder="Mobile Number"
               required
+              className="w-full border rounded p-2"
             />
           </>
         )}
 
+        {/* Faculty-specific fields */}
         {role === "faculty" && (
           <div>
             <label className="block font-medium mb-1">

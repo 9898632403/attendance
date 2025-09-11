@@ -4,6 +4,7 @@ import axios from "axios";
 
 const Timetable = ({ adminView = false, user, token }) => {
   const [branches, setBranches] = useState([]);
+  const [faculties, setFaculties] = useState([]);
   const [selected, setSelected] = useState({ branch: "", semester: "" });
   const [formData, setFormData] = useState({
     branchCode: "",
@@ -14,8 +15,12 @@ const Timetable = ({ adminView = false, user, token }) => {
   const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // -------- Fetch existing timetables ----------
   useEffect(() => {
-    if (adminView) fetchBranches();
+    if (adminView) {
+      fetchBranches();
+      fetchFaculties();
+    }
   }, [adminView]);
 
   const fetchBranches = async () => {
@@ -33,9 +38,23 @@ const Timetable = ({ adminView = false, user, token }) => {
     }
   };
 
+  const fetchFaculties = async () => {
+    try {
+      const res = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/faculties`, {
+        headers: {
+          "X-User-Email": user?.email,
+          role: user?.role,
+          Authorization: token,
+        },
+      });
+      setFaculties(res.data || []);
+    } catch (err) {
+      console.error("Error fetching faculties:", err);
+    }
+  };
+
   const fetchTimetable = async (branch, semester) => {
     if (!branch || !semester) return;
-
     setIsLoading(true);
     setError("");
     setSuccess("");
@@ -53,7 +72,6 @@ const Timetable = ({ adminView = false, user, token }) => {
           },
         }
       );
-
       setFormData({
         branchCode: branch,
         semester,
@@ -77,12 +95,24 @@ const Timetable = ({ adminView = false, user, token }) => {
     fetchTimetable(branch, semester);
   };
 
+  // -------- Input Change ----------
   const handleChange = (e, day, slot, field) => {
     setFormData((prev) => {
       const updatedLectures = { ...prev.lectures };
       if (!updatedLectures[day]) updatedLectures[day] = {};
       if (!updatedLectures[day][slot]) updatedLectures[day][slot] = {};
-      updatedLectures[day][slot][field] = e.target.value || "";
+
+      if (field === "faculty") {
+        const facultyObj = faculties.find(
+          (f) => f.extra_info?.facultyCode === e.target.value
+        );
+        updatedLectures[day][slot][field] = facultyObj
+          ? { name: facultyObj.name, facultyCode: facultyObj.extra_info.facultyCode }
+          : {};
+      } else {
+        updatedLectures[day][slot][field] = e.target.value || "";
+      }
+
       return { ...prev, lectures: updatedLectures };
     });
   };
@@ -105,6 +135,9 @@ const Timetable = ({ adminView = false, user, token }) => {
       setError(err.response?.data?.error || "Error saving timetable");
     }
   };
+
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const slots = [1, 2, 3, 4, 5, 6];
 
   return (
     <div className="container mx-auto p-6">
@@ -133,24 +166,36 @@ const Timetable = ({ adminView = false, user, token }) => {
 
           <form className="mt-4" onSubmit={handleSubmit}>
             <div className="flex gap-4 mb-4">
-              <input
-                type="text"
-                placeholder="Branch (e.g. CE)"
+              {/* Branch dropdown */}
+              <select
                 value={formData.branchCode}
                 onChange={(e) =>
                   setFormData({ ...formData, branchCode: e.target.value })
                 }
                 required
-              />
-              <input
-                type="number"
-                placeholder="Semester"
+              >
+                <option value="">Select Branch</option>
+                <option value="BBA">BBA</option>
+                <option value="B.Tech CE">B.Tech CE</option>
+                <option value="B.Tech IT">B.Tech IT</option>
+                <option value="MBA">MBA</option>
+              </select>
+
+              {/* Semester dropdown */}
+              <select
                 value={formData.semester}
                 onChange={(e) =>
                   setFormData({ ...formData, semester: e.target.value })
                 }
                 required
-              />
+              >
+                <option value="">Select Semester</option>
+                {[...Array(8).keys()].map((num) => (
+                  <option key={num + 1} value={num + 1}>
+                    Semester {num + 1}
+                  </option>
+                ))}
+              </select>
             </div>
 
             {/* timetable slots table */}
@@ -158,7 +203,7 @@ const Timetable = ({ adminView = false, user, token }) => {
               <thead>
                 <tr>
                   <th className="border p-2">Day</th>
-                  {[1, 2, 3, 4, 5, 6].map((slot) => (
+                  {slots.map((slot) => (
                     <th key={slot} className="border p-2">
                       Lecture {slot}
                     </th>
@@ -166,55 +211,59 @@ const Timetable = ({ adminView = false, user, token }) => {
                 </tr>
               </thead>
               <tbody>
-                {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"].map(
-                  (day) => (
-                    <tr key={day}>
-                      <td className="border p-2 font-semibold">{day}</td>
-                      {[1, 2, 3, 4, 5, 6].map((slot) => (
-                        <td key={slot} className="border p-2">
-                          <input
-                            type="text"
-                            placeholder="Subject / Break"
-                            value={formData.lectures[day]?.[slot]?.subject || ""}
-                            onChange={(e) => handleChange(e, day, slot, "subject")}
-                          />
-                          <input
-                            type="text"
-                            placeholder="Faculty"
-                            value={
-                              typeof formData.lectures[day]?.[slot]?.faculty === "object"
-                                ? formData.lectures[day][slot].faculty.name || ""
-                                : formData.lectures[day]?.[slot]?.faculty || ""
-                            }
-                            onChange={(e) => handleChange(e, day, slot, "faculty")}
-                          />
-                          <input
-                            type="text"
-                            placeholder="Class No"
-                            value={formData.lectures[day]?.[slot]?.classNo || ""}
-                            onChange={(e) => handleChange(e, day, slot, "classNo")}
-                          />
-                          <input
-                            type="text"
-                            placeholder="Location"
-                            value={formData.lectures[day]?.[slot]?.location || ""}
-                            onChange={(e) => handleChange(e, day, slot, "location")}
-                          />
-                          <input
-                            type="time"
-                            value={formData.lectures[day]?.[slot]?.startTime || ""}
-                            onChange={(e) => handleChange(e, day, slot, "startTime")}
-                          />
-                          <input
-                            type="time"
-                            value={formData.lectures[day]?.[slot]?.endTime || ""}
-                            onChange={(e) => handleChange(e, day, slot, "endTime")}
-                          />
-                        </td>
-                      ))}
-                    </tr>
-                  )
-                )}
+                {days.map((day) => (
+                  <tr key={day}>
+                    <td className="border p-2 font-semibold">{day}</td>
+                    {slots.map((slot) => (
+                      <td key={slot} className="border p-2">
+                        <input
+                          type="text"
+                          placeholder="Subject / Break"
+                          value={formData.lectures[day]?.[slot]?.subject || ""}
+                          onChange={(e) => handleChange(e, day, slot, "subject")}
+                        />
+
+                        {/* Faculty dropdown */}
+                        <select
+                          value={
+                            formData.lectures[day]?.[slot]?.faculty?.facultyCode || ""
+                          }
+                          onChange={(e) => handleChange(e, day, slot, "faculty")}
+                        >
+                          <option value="">Select Faculty</option>
+                          {faculties.map((f) => (
+                            <option key={f._id} value={f.extra_info?.facultyCode}>
+                              {f.name} ({f.extra_info?.facultyCode})
+                            </option>
+                          ))}
+                        </select>
+
+                        <input
+                          type="text"
+                          placeholder="Class No"
+                          value={formData.lectures[day]?.[slot]?.classNo || ""}
+                          onChange={(e) => handleChange(e, day, slot, "classNo")}
+                        />
+                        <input
+                          type="text"
+                          placeholder="Location"
+                          value={formData.lectures[day]?.[slot]?.location || ""}
+                          onChange={(e) => handleChange(e, day, slot, "location")}
+                        />
+                        <input
+                          type="time"
+                          value={formData.lectures[day]?.[slot]?.startTime || ""}
+                          onChange={(e) => handleChange(e, day, slot, "startTime")}
+                        />
+                        <input
+                          type="time"
+                          value={formData.lectures[day]?.[slot]?.endTime || ""}
+                          onChange={(e) => handleChange(e, day, slot, "endTime")}
+                        />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
 
