@@ -15,8 +15,10 @@ const StudentDashboard = () => {
   const [timetable, setTimetable] = useState([]);
   const [activeLecture, setActiveLecture] = useState(null);
   const [confetti, setConfetti] = useState(false);
+  const [liveLecture, setLiveLecture] = useState(null);
 
   const BACKEND_BASE = import.meta.env.VITE_BACKEND_URL;
+  const normalize = (str) => (str || "").toString().trim().toLowerCase();
 
   useEffect(() => {
     const u = JSON.parse(localStorage.getItem("user"));
@@ -32,26 +34,67 @@ const StudentDashboard = () => {
       email: u.email,
       name: u.name,
     };
+
     setUser(safeUser);
 
     if (safeUser.email) fetchAttendance(safeUser.email);
-    if (safeUser.branchCode && safeUser.sem) fetchLiveLecture(safeUser.branchCode, safeUser.sem);
+    if (safeUser.branchCode && safeUser.sem) {
+      fetchTimetable(safeUser.branchCode, safeUser.sem);
+      fetchLiveLecture(safeUser.branchCode, safeUser.sem);
+    }
   }, [navigate]);
 
-  // fetch live lecture for student's branch+sem
+  // fetch all timetable (admin uploaded)
+  const fetchTimetable = async (branch, sem) => {
+    try {
+      const res = await axios.get(`${BACKEND_BASE}/api/timetables`);
+      const allTimetables = res.data || [];
+
+      const studentLectures = [];
+      allTimetables.forEach((t) => {
+        if (
+          normalize(t.branchCode) === normalize(branch) &&
+          normalize(t.semester) === normalize(sem)
+        ) {
+          Object.entries(t.lectures || {}).forEach(([day, slots]) => {
+            Object.entries(slots).forEach(([slot, lecture]) => {
+              if (!lecture) return;
+              studentLectures.push({
+                id: `${branch}-${sem}-${day}-${slot}`,
+                branchCode: t.branchCode,
+                semester: t.semester,
+                day,
+                slot,
+                ...lecture,
+                isLive: lecture.isLive || false,
+              });
+            });
+          });
+        }
+      });
+      setTimetable(studentLectures);
+    } catch (err) {
+      console.error("❌ Error fetching timetable:", err);
+    }
+  };
+
+  // fetch live lecture (specific branch+sem)
   const fetchLiveLecture = async (branch, sem) => {
     try {
-      const res = await axios.get(`${BACKEND_BASE}/api/timetable/${branch}/${sem}/live`);
+      const res = await axios.get(
+        `${BACKEND_BASE}/api/timetable/${branch}/${sem}/live`
+      );
       if (res.data && Object.keys(res.data).length > 0) {
-        setTimetable([res.data]);
+        setLiveLecture(res.data);
       } else {
-        setTimetable([]);
+        setLiveLecture(null);
       }
     } catch (err) {
       console.error("❌ Error fetching live lecture:", err);
     }
   };
 
+  // fetch attendance for logged student
   const fetchAttendance = async (studentEmail) => {
     try {
       const res = await axios.get(`${BACKEND_BASE}/api/attendance/${studentEmail}`);
@@ -61,18 +104,30 @@ const StudentDashboard = () => {
     }
   };
 
+  // when student joins lecture
   const handleJoinSession = (lecture) => {
-    if (lecture.isLive) setActiveLecture(lecture);
-    else createNotification("This session is not live right now", "error");
+    if (
+      liveLecture &&
+      normalize(liveLecture.subject) === normalize(lecture.subject)
+    ) {
+      setActiveLecture(lecture);
+    } else {
+      createNotification("This session is not live right now", "error");
+    }
   };
 
+  // on QR scan success
   const handleScanSuccess = async (rawData) => {
     if (!user) return;
     try {
       const record = await axios.post(
         `${BACKEND_BASE}/api/attendance/scan`,
         { qrValue: rawData },
-        { headers: { "X-User-Email": user.email } }
+        {
+          headers: {
+            "X-User-Email": user.email,
+          },
+        }
       );
 
       if (record.data.message?.includes("marked")) {
@@ -92,7 +147,6 @@ const StudentDashboard = () => {
 
   const handleLogout = () => {
     localStorage.removeItem("user");
-    localStorage.removeItem("token");
     navigate("/login");
   };
 
@@ -107,7 +161,8 @@ const StudentDashboard = () => {
       notification.classList.remove("animate-fade-in");
       notification.classList.add("animate-fade-out");
       setTimeout(() => {
-        if (document.body.contains(notification)) document.body.removeChild(notification);
+        if (document.body.contains(notification))
+          document.body.removeChild(notification);
       }, 500);
     }, 3000);
   };
@@ -115,23 +170,41 @@ const StudentDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-50 p-6">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-indigo-800">Welcome, {user?.name}</h1>
-        <button onClick={handleLogout} className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Logout</button>
+        <h1 className="text-2xl font-bold text-indigo-800">
+          Welcome, {user?.name}
+        </h1>
+        <button
+          onClick={handleLogout}
+          className="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600"
+        >
+          Logout
+        </button>
       </div>
 
-      <h2 className="text-xl font-semibold mb-4">Live Lecture</h2>
+      <h2 className="text-xl font-semibold mb-4">Your Timetable</h2>
       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
         {timetable.map((lecture) => (
-          <TimetableCard key={lecture.id} lecture={lecture} onJoin={handleJoinSession} />
+          <TimetableCard
+            key={lecture.id}
+            lecture={lecture}
+            onJoin={handleJoinSession}
+          />
         ))}
       </div>
 
       {activeLecture && (
         <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg shadow-lg w-full max-w-lg">
-            <h3 className="text-lg font-bold mb-4">Join Session: {activeLecture.subject}</h3>
+            <h3 className="text-lg font-bold mb-4">
+              Join Session: {activeLecture.subject}
+            </h3>
             <QRScanner onScanSuccess={handleScanSuccess} />
-            <button onClick={() => setActiveLecture(null)} className="mt-4 bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700">Cancel</button>
+            <button
+              onClick={() => setActiveLecture(null)}
+              className="mt-4 bg-gray-600 text-white px-4 py-2 rounded hover:bg-gray-700"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -140,7 +213,8 @@ const StudentDashboard = () => {
       <ul className="bg-white shadow rounded p-4 space-y-2">
         {attendance.map((a, idx) => (
           <li key={idx} className="border-b pb-2">
-            <strong>{a.sessionId}</strong> — {new Date(a.timestamp).toLocaleString()}
+            <strong>{a.sessionId}</strong> —{" "}
+            {new Date(a.timestamp).toLocaleString()}
           </li>
         ))}
       </ul>
