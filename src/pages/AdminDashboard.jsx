@@ -17,6 +17,9 @@ const AdminDashboard = () => {
   const token = localStorage.getItem("token");
   const adminEmails = ["admin@example.com", "head@example.com", "admin@iar.com", "head@iar.com"];
 
+  // Base URL for API calls - adjust based on your environment
+  const API_BASE_URL = process.env.REACT_APP_API_URL || "";
+
   useEffect(() => {
     if (user?.role === "admin" && adminEmails.includes(user.email)) {
       setIsAuthorized(true);
@@ -34,26 +37,36 @@ const AdminDashboard = () => {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setMessage("");
+      
+      let endpoint = "";
       if (activeTab === "students") {
-        const response = await axios.get("/api/admin/students", {
-          headers: {
-            "X-User-Email": user.email,
-            "Authorization": `Bearer ${token}`
-          }
-        });
-        setStudents(response.data);
+        endpoint = "/api/admin/students";
       } else if (activeTab === "faculty") {
-        const response = await axios.get("/api/admin/faculty", {
-          headers: {
-            "X-User-Email": user.email,
-            "Authorization": `Bearer ${token}`
-          }
-        });
+        endpoint = "/api/admin/faculty";
+      }
+      
+      const response = await axios.get(`${API_BASE_URL}${endpoint}`, {
+        headers: {
+          "X-User-Email": user.email,
+          "Authorization": `Bearer ${token}`
+        }
+      });
+      
+      if (activeTab === "students") {
+        setStudents(response.data);
+      } else {
         setFaculty(response.data);
       }
     } catch (error) {
       console.error("Error fetching data:", error);
-      setMessage("Error fetching data");
+      if (error.response?.status === 404) {
+        setMessage("API endpoint not found. Please check if the backend has the required routes.");
+      } else if (error.response?.status === 403) {
+        setMessage("You are not authorized to access this data.");
+      } else {
+        setMessage("Error fetching data. Please check the console for details.");
+      }
     } finally {
       setLoading(false);
     }
@@ -65,7 +78,7 @@ const AdminDashboard = () => {
     }
 
     try {
-      const response = await axios.delete(`/api/admin/user/${email}`, {
+      const response = await axios.delete(`${API_BASE_URL}/api/admin/user/${email}`, {
         headers: {
           "X-User-Email": user.email,
           "Authorization": `Bearer ${token}`
@@ -148,7 +161,7 @@ const AdminDashboard = () => {
         </button>
       </div>
 
-      {/* Pass user + token as props so child components can call backend */}
+      {/* Content based on active tab */}
       <div>
         {activeTab === "timetable" && (
           <Timetable adminView={true} user={user} token={token} />
@@ -161,7 +174,7 @@ const AdminDashboard = () => {
             <h2 className="text-2xl font-bold mb-4">Manage Students</h2>
             {loading ? (
               <p>Loading students...</p>
-            ) : (
+            ) : students.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border">
                   <thead>
@@ -195,6 +208,8 @@ const AdminDashboard = () => {
                   </tbody>
                 </table>
               </div>
+            ) : (
+              <p>No students found.</p>
             )}
           </div>
         )}
@@ -203,7 +218,7 @@ const AdminDashboard = () => {
             <h2 className="text-2xl font-bold mb-4">Manage Faculty</h2>
             {loading ? (
               <p>Loading faculty...</p>
-            ) : (
+            ) : faculty.length > 0 ? (
               <div className="overflow-x-auto">
                 <table className="min-w-full bg-white border">
                   <thead>
@@ -237,6 +252,8 @@ const AdminDashboard = () => {
                   </tbody>
                 </table>
               </div>
+            ) : (
+              <p>No faculty members found.</p>
             )}
           </div>
         )}
