@@ -15,7 +15,10 @@ const Timetable = ({ adminView = false, user, token }) => {
   const [success, setSuccess] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // -------- Fetch existing timetables ----------
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const slots = [1, 2, 3, 4, 5, 6];
+
+  // Fetch branches & faculties on admin view
   useEffect(() => {
     if (adminView) {
       fetchBranches();
@@ -47,6 +50,7 @@ const Timetable = ({ adminView = false, user, token }) => {
           Authorization: token,
         },
       });
+      console.log("Faculties fetched:", res.data);
       setFaculties(res.data || []);
     } catch (err) {
       console.error("Error fetching faculties:", err);
@@ -61,9 +65,7 @@ const Timetable = ({ adminView = false, user, token }) => {
 
     try {
       const res = await axios.get(
-        `${import.meta.env.VITE_BACKEND_URL}/api/timetable/${encodeURIComponent(
-          branch
-        )}/${encodeURIComponent(semester)}`,
+        `${import.meta.env.VITE_BACKEND_URL}/api/timetable/${encodeURIComponent(branch)}/${encodeURIComponent(semester)}`,
         {
           headers: {
             "X-User-Email": user?.email,
@@ -95,7 +97,6 @@ const Timetable = ({ adminView = false, user, token }) => {
     fetchTimetable(branch, semester);
   };
 
-  // -------- Input Change ----------
   const handleChange = (e, day, slot, field) => {
     setFormData((prev) => {
       const updatedLectures = { ...prev.lectures };
@@ -108,7 +109,7 @@ const Timetable = ({ adminView = false, user, token }) => {
         );
         updatedLectures[day][slot][field] = facultyObj
           ? { name: facultyObj.name, facultyCode: facultyObj.extra_info.facultyCode }
-          : {};
+          : null;
       } else {
         updatedLectures[day][slot][field] = e.target.value || "";
       }
@@ -136,9 +137,6 @@ const Timetable = ({ adminView = false, user, token }) => {
     }
   };
 
-  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-  const slots = [1, 2, 3, 4, 5, 6];
-
   return (
     <div className="container mx-auto p-6">
       <h1 className="text-3xl font-bold mb-6">Class Timetable</h1>
@@ -149,6 +147,7 @@ const Timetable = ({ adminView = false, user, token }) => {
           <select
             value={`${selected.branch}|${selected.semester}`}
             onChange={handleSelectChange}
+            className="border p-2 rounded mb-4 w-full"
           >
             <option value="">-- Select Branch & Semester --</option>
             {branches.map((b, idx) => (
@@ -158,20 +157,12 @@ const Timetable = ({ adminView = false, user, token }) => {
             ))}
           </select>
 
-          <h2 className="text-xl font-semibold mb-4 mt-4">
-            {selected.branch ? "Edit Timetable" : "Create New Timetable"}
-          </h2>
-          {error && <p className="text-red-600 mt-2">{error}</p>}
-          {success && <p className="text-green-600 mt-2">{success}</p>}
-
           <form className="mt-4" onSubmit={handleSubmit}>
             <div className="flex gap-4 mb-4">
-              {/* Branch dropdown */}
+              {/* Branch */}
               <select
                 value={formData.branchCode}
-                onChange={(e) =>
-                  setFormData({ ...formData, branchCode: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, branchCode: e.target.value })}
                 required
               >
                 <option value="">Select Branch</option>
@@ -181,12 +172,10 @@ const Timetable = ({ adminView = false, user, token }) => {
                 <option value="MBA">MBA</option>
               </select>
 
-              {/* Semester dropdown */}
+              {/* Semester */}
               <select
                 value={formData.semester}
-                onChange={(e) =>
-                  setFormData({ ...formData, semester: e.target.value })
-                }
+                onChange={(e) => setFormData({ ...formData, semester: e.target.value })}
                 required
               >
                 <option value="">Select Semester</option>
@@ -198,7 +187,6 @@ const Timetable = ({ adminView = false, user, token }) => {
               </select>
             </div>
 
-            {/* timetable slots table */}
             <table className="w-full border-collapse border">
               <thead>
                 <tr>
@@ -225,9 +213,7 @@ const Timetable = ({ adminView = false, user, token }) => {
 
                         {/* Faculty dropdown */}
                         <select
-                          value={
-                            formData.lectures[day]?.[slot]?.faculty?.facultyCode || ""
-                          }
+                          value={formData.lectures[day]?.[slot]?.faculty?.facultyCode || ""}
                           onChange={(e) => handleChange(e, day, slot, "faculty")}
                         >
                           <option value="">Select Faculty</option>
@@ -267,10 +253,10 @@ const Timetable = ({ adminView = false, user, token }) => {
               </tbody>
             </table>
 
-            <button
-              type="submit"
-              className="mt-4 bg-blue-600 text-white px-4 py-2 rounded"
-            >
+            {error && <p className="text-red-600 mt-2">{error}</p>}
+            {success && <p className="text-green-600 mt-2">{success}</p>}
+
+            <button type="submit" className="mt-4 bg-blue-600 text-white px-4 py-2 rounded">
               {selected.branch ? "Update Timetable" : "Save Timetable"}
             </button>
           </form>
@@ -294,10 +280,8 @@ const Timetable = ({ adminView = false, user, token }) => {
                     {Object.entries(slots).map(([slot, data]) => (
                       <p key={slot}>
                         <b>Lecture {slot}:</b> {data.subject || "N/A"} (
-                        {typeof data.faculty === "object"
-                          ? data.faculty.name || "N/A"
-                          : data.faculty || "N/A"}
-                        ) <br />
+                        {data.faculty?.name || "N/A"})
+                        <br />
                         {data.classNo || "N/A"}, {data.location || "N/A"} <br />
                         {data.startTime || "?"} - {data.endTime || "?"}
                       </p>
