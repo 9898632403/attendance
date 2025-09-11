@@ -1,33 +1,31 @@
-// src/components/TimetableSimple.jsx
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 import QRCode from "react-qr-code";
 
 const TimetableSimple = ({ adminView = false, user, token }) => {
   const [branches, setBranches] = useState([]);
-  const [faculties, setFaculties] = useState([]);
   const [selected, setSelected] = useState({ branch: "", semester: "" });
   const [lectures, setLectures] = useState({});
   const [liveLecture, setLiveLecture] = useState(null);
   const [qrCode, setQrCode] = useState("");
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+  const BASE_URL = import.meta.env.VITE_BACKEND_URL;
 
   useEffect(() => {
-    if (adminView) {
-      fetchBranches();
-      fetchFaculties();
-    } else {
-      fetchBranches(); // for students/faculty view
-    }
-    const interval = setInterval(() => generateLiveQr(), 5000);
+    fetchBranches();
+    const interval = setInterval(() => {
+      if (selected.branch && selected.semester && !adminView) {
+        fetchLiveLecture(selected.branch, selected.semester);
+      }
+    }, 5000);
     return () => clearInterval(interval);
-  }, [adminView]);
+  }, [selected, adminView]);
 
   const fetchBranches = async () => {
     try {
-      const res = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/timetables`, {
-        headers: { "X-User-Email": user?.email, role: user?.role, Authorization: token },
+      const res = await axios.get(`${BASE_URL}/api/timetables`, {
+        headers: { "X-User-Email": user?.email, Authorization: token },
       });
       setBranches(res.data || []);
     } catch (err) {
@@ -35,33 +33,39 @@ const TimetableSimple = ({ adminView = false, user, token }) => {
     }
   };
 
-  const fetchFaculties = async () => {
-    try {
-      const res = await axios.get(`${import.meta.env.VITE_BACKEND_URL}/api/faculties`, {
-        headers: { "X-User-Email": user?.email, role: user?.role, Authorization: token },
-      });
-      setFaculties(res.data || []);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
   const fetchTimetable = async (branch, semester) => {
     try {
-      const res = await axios.get(
-        `${import.meta.env.VITE_BACKEND_URL}/api/timetable/${branch}/${semester}`,
-        { headers: { "X-User-Email": user?.email, role: user?.role, Authorization: token } }
-      );
+      const res = await axios.get(`${BASE_URL}/api/timetable/${branch}/${semester}`, {
+        headers: { "X-User-Email": user?.email, Authorization: token },
+      });
       setLectures(res.data.lectures || {});
     } catch {
       setLectures({});
     }
   };
 
+  const fetchLiveLecture = async (branch, semester) => {
+    try {
+      const res = await axios.get(`${BASE_URL}/api/timetable/${branch}/${semester}/live`, {
+        headers: { "X-User-Email": user?.email, Authorization: token },
+      });
+      if (res.data && Object.keys(res.data).length) {
+        setLiveLecture({ ...res.data, branch, semester });
+        setQrCode(`${res.data.sessionId || branch}|${semester}|${Date.now()}::${res.data.token || ""}`);
+      } else {
+        setLiveLecture(null);
+        setQrCode("");
+      }
+    } catch {
+      setLiveLecture(null);
+      setQrCode("");
+    }
+  };
+
   const handleSelectChange = (e) => {
     const [branch, semester] = e.target.value.split("|");
     setSelected({ branch, semester });
-    fetchTimetable(branch, semester);
+    if (branch && semester) fetchTimetable(branch, semester);
   };
 
   const handleLectureChange = (day, value) => {
@@ -70,22 +74,17 @@ const TimetableSimple = ({ adminView = false, user, token }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!selected.branch || !selected.semester) return;
     try {
       await axios.post(
-        `${import.meta.env.VITE_BACKEND_URL}/api/timetable`,
+        `${BASE_URL}/api/timetable`,
         { branchCode: selected.branch, semester: selected.semester, lectures },
         { headers: { "X-User-Email": user?.email, role: user?.role, Authorization: token } }
       );
       alert("Timetable saved!");
       fetchBranches();
-    } catch (err) {
+    } catch {
       alert("Error saving timetable");
-    }
-  };
-
-  const generateLiveQr = () => {
-    if (liveLecture) {
-      setQrCode(`${liveLecture.branch}|${liveLecture.semester}|${Date.now()}`);
     }
   };
 
@@ -132,18 +131,25 @@ const TimetableSimple = ({ adminView = false, user, token }) => {
             <h3 className="font-bold">
               {b.branchCode} - Semester {b.semester}
             </h3>
-            {days.map((day) => (
-              <p key={day}>
-                <b>{day}:</b> {b.lectures?.[day] || "N/A"}{" "}
-                {liveLecture?.day === day && <span className="text-red-600">Live</span>}
-              </p>
-            ))}
-            {liveLecture && liveLecture.branch === b.branchCode && liveLecture.semester === b.semester && (
-              <div className="mt-2">
-                <QRCode value={qrCode} size={100} />
-                <p className="text-sm">Scan to join live lecture</p>
-              </div>
-            )}
+            {days.map((day) => {
+              const lectureData = b.lectures?.[day];
+              const subject = typeof lectureData === "object" ? lectureData.subject : lectureData;
+              const isLive = typeof lectureData === "object" && lectureData.isLive;
+              return (
+                <p key={day}>
+                  <b>{day}:</b> {subject || "N/A"} {isLive && <span className="text-red-600">Live</span>}
+                </p>
+              );
+            })}
+            {liveLecture &&
+              liveLecture.branch === b.branchCode &&
+              liveLecture.semester === b.semester &&
+              qrCode && (
+                <div className="mt-2">
+                  <QRCode value={qrCode} size={100} />
+                  <p className="text-sm">Scan to join live lecture</p>
+                </div>
+              )}
           </div>
         ))}
       </div>
